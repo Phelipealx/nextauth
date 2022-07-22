@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { parseCookies, setCookie } from "nookies";
+import { signOut } from "../contexts/AuthContext";
 
 let cookies = parseCookies();
 let isRefreshing = false;
@@ -16,14 +17,14 @@ api.interceptors.response.use(
   (response) => {
     return response;
   },
-  ({ response, config }: AxiosError) => {
-    const { status, data } = response as any;
+  (error: AxiosError) => {
+    const { status, data } = error.response as any;
     if (status === 401) {
       if (data.code === "token.expired") {
         cookies = parseCookies();
 
         const { "nextauth.refreshToken": refreshToken } = cookies;
-        const originalConfig = config;
+        const originalConfig = error.config;
 
         if (!isRefreshing) {
           isRefreshing = true;
@@ -50,9 +51,9 @@ api.interceptors.response.use(
 
               api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-              failedRequestsQueue.forEach((request) =>
-                request.onSuccess(token)
-              );
+              failedRequestsQueue.forEach((request) => {
+                request.onSuccess(token);
+              });
               failedRequestsQueue = [];
             })
             .catch((err) => {
@@ -77,7 +78,10 @@ api.interceptors.response.use(
           });
         });
       } else {
+        signOut();
       }
     }
+
+    return Promise.reject(error);
   }
 );
